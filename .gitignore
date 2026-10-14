@@ -1,0 +1,8 @@
+data/
+oof/
+submissions/
+reference/
+kernels/*/output/
+catboost_info/
+__pycache__/
+*.pyc
