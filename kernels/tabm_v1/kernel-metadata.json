@@ -1,0 +1,17 @@
+{
+  "id": "locdunhat/s6e10-tabm-original-stats",
+  "title": "S6E10 TabM Original Stats",
+  "code_file": "s6e10-tabm-v1.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "competition_sources": [
+    "playground-series-s6e10"
+  ],
+  "dataset_sources": [
+    "arseniyshutko/binary-aviation-satisfaction-129k"
+  ],
+  "kernel_sources": []
+}
