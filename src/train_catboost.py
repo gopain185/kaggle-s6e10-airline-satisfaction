@@ -9,9 +9,14 @@ from sklearn.metrics import roc_auc_score
 from common import CATEGORICAL, RATINGS, features, folds, load, save
 
 
-def main(name: str, mode: str, depth: int) -> None:
+def main(name: str, mode: str, depth: int, route: bool = False) -> None:
     train, test, y = load()
     X, X_test = features(train, mode), features(test, mode)
+    if route:  # Flight Distance as a categorical route ID (CatBoost's ordered TS) plus the label-free route profile
+        from train_lgbm import route_profile
+        P, P_test = route_profile(train, test)
+        X, X_test = X.join(P), X_test.join(P_test)
+        X["route"], X_test["route"] = (d["Flight Distance"].astype(str).astype("category") for d in (train, test))
     cat_cols = [c for c in X.columns if str(X[c].dtype) == "category"]
     for c in cat_cols:  # CatBoost wants plain strings/ints for categoricals
         X[c] = X[c].astype(str)
@@ -34,6 +39,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", default="basic", choices=["basic", "cat", "allcat", "orig", "orig2", "knn"])
     parser.add_argument("--depth", type=int, default=7)
+    parser.add_argument("--route", action="store_true", help="add Flight Distance as a categorical route + route profile")
     parser.add_argument("--name")
     args = parser.parse_args()
-    main(args.name or f"cat_{args.mode}_d{args.depth}", args.mode, args.depth)
+    main(args.name or f"cat_{args.mode}_d{args.depth}", args.mode, args.depth, args.route)
