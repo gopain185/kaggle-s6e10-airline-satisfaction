@@ -18,10 +18,15 @@ PARAMS = dict(
 )
 
 
-def main(name: str, mode: str, te: bool) -> None:
+def main(name: str, mode: str, te: bool, route: bool = False) -> None:
     train, test, y = load()
     X, X_test = features(train, mode), features(test, mode)
     keys, keys_test = combo_keys(train), combo_keys(test)
+    if route:  # same route features as LightGBM: in-fold TE of the route plus its passenger profile
+        from train_lgbm import route_profile
+        keys["route"], keys_test["route"] = train["Flight Distance"].astype(str), test["Flight Distance"].astype(str)
+        P, P_test = route_profile(train, test)
+        X, X_test = pd.concat([X, P], axis=1), pd.concat([X_test, P_test], axis=1)
     oof, test_pred = np.zeros(len(X)), np.zeros(len(X_test))
     for k, (tr, va) in enumerate(folds(y)):
         X_tr, X_va, X_te = X.iloc[tr], X.iloc[va], X_test
@@ -40,6 +45,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", default="orig", choices=["basic", "cat", "allcat", "orig", "orig2", "knn"])
     parser.add_argument("--te", action="store_true", help="add in-fold target encoding of TE_COMBOS")
+    parser.add_argument("--route", action="store_true", help="add route (Flight Distance) TE and profile; needs --te")
     parser.add_argument("--name")
     args = parser.parse_args()
-    main(args.name or f"xgb_{args.mode}{'_te' if args.te else ''}", args.mode, args.te)
+    main(args.name or f"xgb_{args.mode}{'_te' if args.te else ''}", args.mode, args.te, args.route)
