@@ -8,7 +8,7 @@ from sklearn.metrics import roc_auc_score
 
 import pandas as pd
 
-from common import RATINGS, combo_keys, features, fold_target_encoding, folds, load, save
+from common import OOF, RATINGS, combo_keys, features, fold_target_encoding, folds, load, save
 
 _ENV = __import__("os").environ
 PARAMS = dict(
@@ -35,8 +35,15 @@ def route_profile(train: pd.DataFrame, test: pd.DataFrame) -> tuple[pd.DataFrame
     return (prof.reindex(df["Flight Distance"]).set_axis(df.index) for df in (train, test))
 
 
-def main(name: str, mode: str, te: bool, route: bool = False) -> None:
+def _logit(p: np.ndarray) -> np.ndarray:
+    p = np.clip(p, 1e-6, 1 - 1e-6)
+    return np.log(p / (1 - p))
+
+
+def main(name: str, mode: str, te: bool, route: bool = False, init: str | None = None) -> None:
     train, test, y = load()
+    # boost from a saved model's out-of-fold logit: every row's starting score comes from a model that did not see it
+    base, base_test = (_logit(np.load(OOF / f"{init}_{s}.npy")) for s in ("oof", "test")) if init else (np.zeros(len(train)), np.zeros(len(test)))
     X, X_test = features(train, mode), features(test, mode)
     keys, keys_test = combo_keys(train), combo_keys(test)
     if route:  # in-fold target encoding of the route alone, plus its passenger profile
@@ -51,11 +58,11 @@ def main(name: str, mode: str, te: bool, route: bool = False) -> None:
             X_tr, X_va, X_te = (pd.concat([a, b], axis=1) for a, b in ((X_tr, t_tr), (X_va, t_va), (X_te, t_te)))
         model = lgb.LGBMClassifier(**PARAMS)
         model.fit(
-            X_tr, y[tr], eval_X=(X_va,), eval_y=(y[va],), eval_metric="auc",
+            X_tr, y[tr], init_score=base[tr], eval_X=(X_va,), eval_y=(y[va],), eval_init_score=[base[va]], eval_metric="auc",
             callbacks=[lgb.early_stopping(200, verbose=False)],
         )
-        oof[va] = model.predict_proba(X_va)[:, 1]
-        test_pred += model.predict_proba(X_te)[:, 1] / 5
+        oof[va] = 1 / (1 + np.exp(-(base[va] + model.predict(X_va, raw_score=True))))
+        test_pred += 1 / (1 + np.exp(-(base_test + model.predict(X_te, raw_score=True)))) / 5
         print(f"fold {k}: AUC {roc_auc_score(y[va], oof[va]):.6f} at {model.best_iteration_} trees")
     save(name, oof, test_pred, test["id"], y)
 
@@ -65,6 +72,7 @@ if __name__ == "__main__":
     parser.add_argument("--mode", default="basic", choices=["basic", "cat", "allcat", "orig", "orig2", "knn"])
     parser.add_argument("--te", action="store_true", help="add in-fold target encoding of TE_COMBOS")
     parser.add_argument("--route", action="store_true", help="add route (Flight Distance) TE and profile; needs --te")
+    parser.add_argument("--init", help="saved model whose OOF/test logits are the starting scores")
     parser.add_argument("--name")
     args = parser.parse_args()
-    main(args.name or f"lgbm_{args.mode}{'_te' if args.te else ''}", args.mode, args.te, args.route)
+    main(args.name or f"lgbm_{args.mode}{'_te' if args.te else ''}", args.mode, args.te, args.route, args.init)
