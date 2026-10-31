@@ -12,7 +12,7 @@ from scipy.stats import rankdata
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score
 
-ROOT = Path(r"D:\Benchmark\kaggle-s6e10")
+ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 from common import OOF, SUB, TARGET, folds, load  # noqa: E402
 
